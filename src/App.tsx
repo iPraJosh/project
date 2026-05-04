@@ -45,7 +45,7 @@ function AppContent() {
       case 'bug-create':
         return <BugCreatePage onNavigate={handleNavigate} />;
       case 'bug-detail':
-        return selectedBugId ? <BugDetailPage bugId={selectedBugId} onNavigate={handleNavigate} /> : <BugsPage onNavigate={handleNavigate} />;
+        return <BugDetailPage bugId={selectedBugId || ''} onNavigate={handleNavigate}/>;
       case 'projects':
         return <ProjectsPage />;
       default:
@@ -69,3 +69,4 @@ function App() {
 }
 
 export default App;
+

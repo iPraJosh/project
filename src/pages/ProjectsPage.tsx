@@ -35,56 +35,68 @@ export default function ProjectsPage() {
   }, [user]);
 
   const loadProjects = async () => {
-    setLoading(true);
+  if (!user) return;
 
-    const { data: memberData } = await supabase
-      .from('project_members')
-      .select('project_id, projects(id, name, description, status, created_at)')
-      .eq('user_id', user!.id);
+  setLoading(true);
 
-    const projectList = (memberData?.map(m => m.projects).filter(Boolean) || []) as unknown as Project[];
+  const { data, error } = await supabase
+    .from('project_members')
+    .select(`
+      project_id,
+      projects (
+        id,
+        name,
+        description,
+        created_at
+      )
+    `)
+    .eq('user_id', user.id);
 
-    // Get bug counts and member counts
-    const enriched = await Promise.all(
-      projectList.map(async (p) => {
-        const [bugRes, memberRes] = await Promise.all([
-          supabase.from('bugs').select('id', { count: 'exact', head: true }).eq('project_id', p.id),
-          supabase.from('project_members').select('id', { count: 'exact', head: true }).eq('project_id', p.id),
-        ]);
-        return {
-          ...p,
-          bug_count: bugRes.count || 0,
-          member_count: memberRes.count || 0,
-        };
-      })
-    );
-
-    setProjects(enriched);
+  if (error) {
+    console.error("PROJECT LOAD ERROR:", error);
     setLoading(false);
-  };
+    return;
+  }
+
+  const projectList =
+    data?.map((m: any) => m.projects).filter(Boolean) || [];
+
+  // 🔥 NEW PART
+  const { data: bugs } = await supabase
+    .from('bugs')
+    .select('project_id');
+
+  const enriched = projectList.map((p: any) => ({
+    ...p,
+    bug_count: bugs?.filter((b: any) => b.project_id === p.id).length || 0,
+  }));
+
+  setProjects(enriched);
+  setLoading(false);
+};
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !newName.trim()) return;
     setCreating(true);
 
-    const { data: project } = await supabase
-      .from('projects')
-      .insert({
-        name: newName.trim(),
-        description: newDesc.trim(),
-        owner_id: user.id,
-      })
-      .select('id')
-      .maybeSingle();
+const { data: project } = await supabase
+  .from('projects')
+  .insert({
+    name: newName,
+    description: newDesc,
+    created_by: user.id,
+  })
+  .select('id')
+  .single();
 
-    if (project) {
-      await supabase.from('project_members').insert({
-        project_id: project.id,
-        user_id: user.id,
-        role: 'owner',
-      });
-    }
+if (project) {
+  await supabase.from('project_members').insert({
+    project_id: project.id,
+    user_id: user.id,
+    role: 'owner',
+  });
+}
 
     setNewName('');
     setNewDesc('');
@@ -193,7 +205,7 @@ export default function ProjectsPage() {
                   <div>
                     <h3 className="text-sm font-semibold text-white">{project.name}</h3>
                     <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border ${statusColor(project.status)}`}>
-                      {project.status.replace('_', ' ')}
+                     {(project.status || 'active').replace('_', ' ')}
                     </span>
                   </div>
                 </div>
@@ -206,11 +218,11 @@ export default function ProjectsPage() {
               <div className="flex items-center gap-4 text-xs text-slate-500">
                 <span className="flex items-center gap-1">
                   <Bug className="w-3.5 h-3.5" />
-                  {project.bug_count} bugs
+                  {project.bug_count || 0}
                 </span>
                 <span className="flex items-center gap-1">
                   <Users className="w-3.5 h-3.5" />
-                  {project.member_count} members
+                  {project.member_count || 0}
                 </span>
                 <span className="flex items-center gap-1">
                   <Archive className="w-3.5 h-3.5" />
